@@ -1,0 +1,15 @@
+libout/
+obj/
+out/
+# should be generated from linkedlist repo
+include/linkedlist.h
+*.a
+*.o
+*.out
+
+# vscode
+.vscode
+.history
+
+# MacOS
+.DS_Store
