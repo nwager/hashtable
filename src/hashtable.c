@@ -156,11 +156,13 @@ static void free_buckets(struct linkedlist **buckets, int num_buckets, kvfree_fn
     struct linkedlist *ll = buckets[i];
     if (ll == NULL) continue; // skip empty buckets
     // free data
-    for (lliter_init(ll); lliter_hasnext(ll);) {
-      struct kv *e = (struct kv *)lliter_next(ll);
+    struct linkedlist_iter *it = lliter_alloc(ll);
+    while (lliter_hasnext(it)) {
+      struct kv *e = (struct kv *)lliter_next(it);
       if (kvfree != NULL)
         kvfree(e->k, e->v);
     }
+    lliter_free(it);
     // free entries
     linkedlist_free(ll, free);
   }
@@ -169,16 +171,21 @@ static void free_buckets(struct linkedlist **buckets, int num_buckets, kvfree_fn
 }
 
 static struct kv *get_entry(struct hashtable *ht, void *key, bool remove) {
+
   size_t ihash = ht->hash(key) % ht->num_buckets;
   struct linkedlist *bucket = ht->buckets[ihash];
+
   // check if bucket is empty
   if (bucket == NULL) return NULL;
+
   // if not, check bucket for key
-  for (lliter_init(bucket); lliter_hasnext(bucket);) {
-    struct kv *e = (struct kv *)lliter_next(bucket);
+  struct kv *e = NULL;
+  struct linkedlist_iter *it = lliter_alloc(bucket);
+  while (lliter_hasnext(it) && e == NULL) {
+    e = (struct kv *)lliter_next(it);
     if (!ht->keycmp(key, e->k)) continue;
     if (remove) {
-      lliter_remove(bucket);
+      lliter_remove(it);
       ht->size--;
       // if list becomes empty, it is now unused
       if (linkedlist_size(bucket) == 0) {
@@ -188,9 +195,9 @@ static struct kv *get_entry(struct hashtable *ht, void *key, bool remove) {
         ht->buckets[ihash] = NULL;
       }
     }
-    return e;
   }
-  return NULL;
+  lliter_free(it);
+  return e;
 }
 
 static void resize(struct hashtable *ht, unsigned int num_buckets) {
@@ -208,10 +215,12 @@ static void resize(struct hashtable *ht, unsigned int num_buckets) {
     // for each old chain, re-map all the entries
     struct linkedlist *ll = oldbuckets[i];
     if (ll == NULL) continue; // skip empty chains
-    for (lliter_init(ll); lliter_hasnext(ll);) {
-      struct kv *e = (struct kv *)lliter_next(ll);
+    struct linkedlist_iter *it = lliter_alloc(ll);
+    while (lliter_hasnext(it)) {
+      struct kv *e = (struct kv *)lliter_next(it);
       hashtable_put(ht, e->k, e->v, NULL);
     }
+    lliter_free(it);
   }
   // free old buckets
   free_buckets(oldbuckets, oldnb, NULL);
